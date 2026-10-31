@@ -43,7 +43,6 @@
     "https://ssl.muenchen.de/*"
   ],
   "background": {
-    "service_worker": "build/background.js",
     "scripts": ["build/background.js"],
     "type": "module"
   },
@@ -144,7 +143,10 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "bibbot-wiso@ridemybyte.github.io",
-      "strict_min_version": "121.0"
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["authenticationInfo", "websiteContent"]
+      }
     }
   }
 }

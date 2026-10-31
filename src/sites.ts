@@ -574,7 +574,20 @@ const sites: Sites = {
   },
   'www.waz.de': {
     selectors: {
-      query: 'h2',
+      // WISO findet die volle Ueberschrift mit Satzzeichen nicht zuverlaessig:
+      // nur die ersten vier laengeren Woerter der Ueberschrift verwenden
+      query: (node: HTMLElement): string => {
+        const el = node.querySelector('article h1, h1')
+        if (!el) {
+          return ''
+        }
+        return el.textContent
+          .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+          .split(/\s+/)
+          .filter((w) => w.length >= 6)
+          .slice(0, 4)
+          .join(' ')
+      },
       date: 'time',
       paywall: '#paywall-container',
       main: 'article .article-body',

@@ -1,102 +1,76 @@
+# Fork-Release: baut die Erweiterung, laesst sie von Mozilla als "unlisted"
+# (Self-Distribution, keine oeffentliche AMO-Seite) signieren und haengt die
+# signierte .xpi plus Quellcode an ein GitHub-Release.
+#
+# Benoetigte Repository-Secrets (Settings -> Secrets and variables -> Actions):
+#   AMO_API_KEY     JWT issuer von https://addons.mozilla.org/developers/addon/api/key/
+#   AMO_API_SECRET  JWT secret von derselben Seite
+#
+# Ausloesen: Version in manifest.json erhoehen, committen, dann
+#   git tag v<version> && git push origin v<version>
+
 on:
   push:
-    # Sequence of patterns matched against refs/tags
     tags:
-      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+      - 'v*'
 
-name: Create Release
+name: Release (Firefox, unlisted)
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-    name: Create Release
-    environment: Release
+  release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: actions/setup-node
-        uses: actions/setup-node@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: '16'
-      - name: Install build environment
+          node-version: '22'
+
+      - name: Install dependencies
         run: npm ci
 
-      # Run lint, type-checking and tests before release
-      - name: Running lint and type check
+      - name: Lint and type check
         run: npm run lint && npm run check-types
-      - name: Create build of test content script
-        run: npm run build
 
-      # FIXME: Tests too flaky, disabled for release
-      # - name: Run the tests
-      #   run: npm run test
-
-      - name: Set tag name in env
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-      - name: Build project and create dist files
-        run: "./dist.sh"
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-        with:
-          tag_name: ${{ env.RELEASE_VERSION }}
-          release_name: Release ${{ env.RELEASE_VERSION }}
-          body: ""
-          draft: false
-          prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          asset_path: ./dist/bibbot.zip
-          asset_name: bibbot-${{ env.RELEASE_VERSION }}.zip
-          asset_content_type: application/zip
-      - name: "web-ext build"
-        id: web-ext-build
-        uses: kewisch/action-web-ext@fe10addf5d5e5ba6b78ffde720dd488a27d10e8c
-        with:
-          cmd: build
-          source: ./dist/bibbot
-      - name: "web-ext sign"
-        id: web-ext-sign
-        uses: kewisch/action-web-ext@fe10addf5d5e5ba6b78ffde720dd488a27d10e8c
-        with:
-          cmd: sign
-          source: ${{ steps.web-ext-build.outputs.target }}
-          channel: listed
-          apiKey: ${{ secrets.FIREFOX_API_KEY }}
-          apiSecret: ${{ secrets.FIREFOX_API_SECRET }}
-          timeout: 900000
-      # # Because it's listed, we are not getting a signed asset anymore
-      # - name: Upload Release XPI Asset
-      #   id: upload-release-xpi-asset
-      #   uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-      #     asset_path: ${{ steps.web-ext-sign.outputs.target }}
-      #     asset_name: bibbot-${{ env.RELEASE_VERSION }}.xpi
-      #     asset_content_type: application/x-xpinstall
-      - name: Trigger GitHub pages rebuild
+      - name: Check tag matches manifest version
         run: |
-          curl --fail --request POST \
-            --url https://api.github.com/repos/${{ github.repository }}/pages/builds \
-            --header "Authorization: Bearer $USER_TOKEN"
+          MANIFEST_VERSION=$(jq -r .version manifest.json)
+          if [ "v${MANIFEST_VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} passt nicht zu manifest.json (${MANIFEST_VERSION})"
+            exit 1
+          fi
+
+      - name: Build extension
+        run: ./dist.sh
+
+      - name: Package source code for Mozilla review
+        run: git archive --format=zip -o dist/source.zip HEAD
+
+      - name: Sign with Mozilla (unlisted)
         env:
-          # You must create a personal token with repo access as GitHub does
-          # not yet support server-to-server page builds.
-          USER_TOKEN: ${{ secrets.USER_TOKEN }}
-      - name: "Publish to Chrome Web Store"
-        uses: trmcnvn/chrome-addon@7fc5a5ad3ff597dc64d6a13de7dcaa8515328be7
-        with:
-          extension: edafomjglmkfbiieocpflnhfdmikkhbo
-          zip: ./dist/bibbot.zip
-          client-id: ${{ secrets.CHROME_CLIENT_ID }}
-          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          WEB_EXT_API_KEY: ${{ secrets.AMO_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          npx --yes web-ext@8 sign \
+            --channel=unlisted \
+            --source-dir=dist/bibbot \
+            --artifacts-dir=dist/signed \
+            --upload-source-code=dist/source.zip \
+            --approval-timeout=900000
+          mv dist/signed/*.xpi "dist/bibbot-wiso-${GITHUB_REF_NAME}.xpi"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mv dist/source.zip "dist/bibbot-wiso-${GITHUB_REF_NAME}-source.zip"
+          gh release create "${GITHUB_REF_NAME}" \
+            "dist/bibbot-wiso-${GITHUB_REF_NAME}.xpi" \
+            "dist/bibbot-wiso-${GITHUB_REF_NAME}-source.zip" \
+            --title "BibBot (WISO-IP) ${GITHUB_REF_NAME}" \
+            --notes "Signierte Firefox-Erweiterung. Installation: .xpi-Datei in Firefox öffnen (oder per Drag & Drop ins Firefox-Fenster ziehen). Siehe README."

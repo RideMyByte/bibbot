@@ -970,6 +970,27 @@ const providers: Providers = {
     ],
     permissions: ['https://www.wiso-net.de/*'],
   },
+  'ip.wiso-net.de': {
+    name: 'WISO – Hochschule (Zugang per IP, ohne Login)',
+    web: 'https://www.wiso-net.de/',
+    params: {
+      'genios.de': {
+        domain: 'www.wiso-net.de',
+        searchCategory: 'Alle%20Quellen',
+      },
+      'old.genios.de': {
+        domain: 'www.wiso-net.de',
+      },
+    },
+    login: [
+      [
+        { message: 'WISO per IP-Freischaltung, kein Login...' },
+        { click: '#bibbot-no-login', optional: true, skipToNext: true },
+      ],
+    ],
+    options: [],
+    permissions: ['https://www.wiso-net.de/*'],
+  },
   'www.lib.bonn.de': {
     name: 'Stadtbibliothek Bonn',
     web: 'https://www.lib.bonn.de/',

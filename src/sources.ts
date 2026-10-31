@@ -75,7 +75,7 @@ const sources: Sources = {
               params.push(`source=${encodeURIComponent(sourceName)}`)
             })
 
-            return `${sourceParams.scheme}${sourceParams.domain}/searchResult/Alle?${params.join('&')}`
+            return `${sourceParams.scheme}${sourceParams.domain}/searchResult/${(sourceParams as { searchCategory?: string }).searchCategory || 'Alle'}?${params.join('&')}`
           },
         },
       ],

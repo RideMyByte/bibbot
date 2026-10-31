@@ -291,6 +291,7 @@ export type ProviderSourceParams = {
   scheme?: string
   portalId?: string
   startUrl?: string
+  searchCategory?: string
 }
 
 export interface DefaultProvider {

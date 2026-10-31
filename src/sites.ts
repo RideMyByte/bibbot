@@ -577,12 +577,15 @@ const sites: Sites = {
       query: 'h2',
       date: 'time',
       paywall: '#paywall-container',
-      main: '.article__header__intro',
+      main: 'article .article-body',
     },
     source: 'genios.de',
     sourceParams: {
-      dbShortcut: 'WAZ',
-      sourceNames: ['Westdeutsche Allgemeine Zeitung'],
+      dbShortcut: 'WAZ,WAZO',
+      sourceNames: [
+        'Westdeutsche Allgemeine Zeitung',
+        'Westdeutsche Allgemeine Zeitung online',
+      ],
     },
   },
   'www.wiwo.de': {
